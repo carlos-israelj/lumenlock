@@ -341,9 +341,17 @@
             typeCell.appendChild(typeBadge);
             row.appendChild(typeCell);
 
-            // Amount
+            // Amount (preserve full 7-decimal precision for XLM)
             const amountCell = document.createElement('td');
-            const amount = parseFloat(tx.amount || 0).toFixed(2);
+            // Parse as string to avoid float precision loss, display up to 7 decimals
+            const amountStr = tx.amount || '0';
+            const amountNum = parseFloat(amountStr);
+            // Format with up to 7 decimals, removing trailing zeros
+            const amount = amountNum.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 7,
+              useGrouping: false
+            });
             amountCell.textContent = amount;
             row.appendChild(amountCell);
 

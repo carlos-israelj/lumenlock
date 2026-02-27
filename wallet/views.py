@@ -49,14 +49,12 @@ def create_wallet(request):
 
 @login_required  # Fixed: Added missing authentication decorator
 def check_balance(request):
-    public_key = request.POST.get('public_key')
-
-    if not public_key:
-        try:
-            wallet = Wallet.objects.get(user=request.user)
-            public_key = wallet.public_key
-        except Wallet.DoesNotExist:
-            return JsonResponse({'error': 'No wallet found for user'}, status=404)
+    # Security: Only allow users to check their own wallet balance
+    try:
+        wallet = Wallet.objects.get(user=request.user)
+        public_key = wallet.public_key
+    except Wallet.DoesNotExist:
+        return JsonResponse({'error': 'No wallet found for user'}, status=404)
 
     try:
         server = Server(settings.STELLAR_HORIZON_URL)
@@ -173,15 +171,30 @@ def send_money(request):
                 xlm_balance = Decimal(balance['balance'])
                 break
 
+        # Fetch current network base fee and base reserve dynamically
+        try:
+            # Get current fee stats from Horizon
+            fee_stats = server.fee_stats().call()
+            # Use max fee for reliability (fee_charged is in stroops)
+            base_fee_stroops = int(fee_stats['max_fee']['max'])
+            # Convert stroops to XLM (1 XLM = 10,000,000 stroops)
+            transaction_fee = Decimal(str(base_fee_stroops)) / Decimal('10000000')
+
+            # Get base reserve from ledger (in stroops)
+            ledger = server.ledgers().order(desc=True).limit(1).call()
+            base_reserve_stroops = int(ledger['_embedded']['records'][0]['base_reserve_in_stroops'])
+            base_reserve = Decimal(str(base_reserve_stroops)) / Decimal('10000000')
+        except Exception:
+            # Fallback to safe defaults if API fails
+            base_fee_stroops = 100
+            transaction_fee = Decimal('0.00001')
+            base_reserve = Decimal('0.5')
+
         # Calculate minimum balance required (base reserve + fee)
-        # Base reserve: 1 XLM per entry (2 entries minimum = 2 XLM)
+        # Base reserve: 1 base reserve per entry (2 entries minimum)
         # Additional reserves for trustlines, offers, signers, etc.
         num_subentries = int(source_account.subentry_count)
-        base_reserve = Decimal('0.5')  # Current base reserve per entry
         min_balance = (2 + num_subentries) * base_reserve
-
-        # Transaction fee (100 stroops = 0.00001 XLM per operation)
-        transaction_fee = Decimal('0.00001')
 
         # Total required: amount + min_balance + fee
         total_required = amount_decimal + min_balance + transaction_fee
@@ -192,11 +205,11 @@ def send_money(request):
                 'error': f'Insufficient funds: You need {total_required} XLM (including {min_balance} XLM minimum balance + {transaction_fee} XLM fee), but your balance is {xlm_balance} XLM. Available to send: {max(available, Decimal("0"))} XLM'
             }, status=400)
 
-        # Build transaction
+        # Build transaction with dynamic base fee
         transaction_builder = TransactionBuilder(
             source_account=source_account,
             network_passphrase=settings.STELLAR_NETWORK_PASSPHRASE,
-            base_fee=100
+            base_fee=base_fee_stroops
         ).append_payment_op(
             destination=destination_public_key,
             amount=amount,
