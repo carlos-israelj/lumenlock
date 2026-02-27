@@ -4,6 +4,7 @@ from wallet.models import Wallet
 from stellar_sdk import Keypair
 import cryptocode
 import json
+from unittest.mock import patch, MagicMock
 
 
 class WalletModelTests(TestCase):
@@ -110,14 +111,25 @@ class CheckBalanceViewTests(TestCase):
         response = self.client.post('/check_balance')
         self.assertEqual(response.status_code, 302)  # Redirect to login
 
-    def test_check_balance_returns_json(self):
-        """Test that check_balance returns JSON response"""
+    @patch('wallet.views.Server')
+    def test_check_balance_returns_json(self, mock_server):
+        """Test that check_balance returns JSON response with mocked Horizon"""
         self.client.login(username='testuser', password='testpass123')
 
-        # Note: This will fail in test because Stellar testnet isn't available
-        # But we can verify the endpoint responds
+        # Mock Horizon server response
+        mock_account = MagicMock()
+        mock_account.call.return_value = {
+            'balances': [
+                {'asset_type': 'native', 'balance': '100.0000000'}
+            ]
+        }
+        mock_server.return_value.accounts.return_value.account_id.return_value = mock_account
+
         response = self.client.post('/check_balance')
         self.assertEqual(response['Content-Type'], 'application/json')
+
+        data = json.loads(response.content)
+        self.assertEqual(data['balance'], '100.0000000')
 
     def test_check_balance_handles_missing_wallet(self):
         """Test check_balance handles users without wallets"""
@@ -248,12 +260,37 @@ class TransactionHistoryViewTests(TestCase):
         response = self.client.get('/transactions')
         self.assertEqual(response.status_code, 302)  # Redirect to login
 
-    def test_transaction_history_returns_json(self):
-        """Test that transaction_history returns JSON"""
+    @patch('wallet.views.Server')
+    def test_transaction_history_returns_json(self, mock_server):
+        """Test that transaction_history returns JSON with mocked Horizon"""
         self.client.login(username='testuser', password='testpass123')
+
+        # Mock Horizon server response for payments
+        mock_payments = MagicMock()
+        mock_payments.call.return_value = {
+            '_embedded': {
+                'records': [
+                    {
+                        'type': 'payment',
+                        'id': '123456789',
+                        'created_at': '2024-01-01T00:00:00Z',
+                        'transaction_hash': 'abc123def456',
+                        'amount': '100.0000000',
+                        'asset_type': 'native',
+                        'from': 'GABC123',
+                        'to': 'GDEF456'
+                    }
+                ]
+            }
+        }
+        mock_server.return_value.payments.return_value.for_account.return_value.order.return_value.limit.return_value = mock_payments
 
         response = self.client.get('/transactions')
         self.assertEqual(response['Content-Type'], 'application/json')
+
+        data = json.loads(response.content)
+        self.assertIn('transactions', data)
+        self.assertEqual(len(data['transactions']), 1)
 
     def test_transaction_history_handles_no_wallet(self):
         """Test transaction_history for users without wallets"""
@@ -285,7 +322,8 @@ class DashboardViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Create Wallet')
 
-    def test_dashboard_shows_balance_with_wallet(self):
+    @patch('wallet.views.Server')
+    def test_dashboard_shows_balance_with_wallet(self, mock_server):
         """Test dashboard shows balance when wallet exists"""
         keypair = Keypair.random()
         encrypted_seed = cryptocode.encrypt(keypair.secret, 'password123')
@@ -295,6 +333,15 @@ class DashboardViewTests(TestCase):
             public_key=keypair.public_key,
             secret_seed=encrypted_seed
         )
+
+        # Mock Horizon server response
+        mock_account = MagicMock()
+        mock_account.call.return_value = {
+            'balances': [
+                {'asset_type': 'native', 'balance': '100.0000000'}
+            ]
+        }
+        mock_server.return_value.accounts.return_value.account_id.return_value = mock_account
 
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get('/dashboard')

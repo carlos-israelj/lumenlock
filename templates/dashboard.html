@@ -301,6 +301,9 @@
     const historyModal = document.getElementById("historyModal");
     historyModal.showModal();
 
+    // Get explorer network from template context (testnet or public)
+    const explorerNetwork = "{{ explorer_network|default:'testnet' }}";
+
     fetch("/transactions", {
       method: "GET",
       headers: {
@@ -343,15 +346,10 @@
 
             // Amount (preserve full 7-decimal precision for XLM)
             const amountCell = document.createElement('td');
-            // Parse as string to avoid float precision loss, display up to 7 decimals
+            // Work directly with the string to preserve exact precision
             const amountStr = tx.amount || '0';
-            const amountNum = parseFloat(amountStr);
-            // Format with up to 7 decimals, removing trailing zeros
-            const amount = amountNum.toLocaleString('en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 7,
-              useGrouping: false
-            });
+            // Simply trim trailing zeros after decimal point for cleaner display
+            const amount = amountStr.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
             amountCell.textContent = amount;
             row.appendChild(amountCell);
 
@@ -376,10 +374,10 @@
             dateCell.textContent = new Date(tx.created_at).toLocaleString();
             row.appendChild(dateCell);
 
-            // Hash (link)
+            // Hash (link) - use dynamic network from template context
             const hashCell = document.createElement('td');
             const hashLink = document.createElement('a');
-            hashLink.href = 'https://stellar.expert/explorer/testnet/tx/' + encodeURIComponent(tx.transaction_hash || '');
+            hashLink.href = 'https://stellar.expert/explorer/' + explorerNetwork + '/tx/' + encodeURIComponent(tx.transaction_hash || '');
             hashLink.target = '_blank';
             hashLink.rel = 'noopener noreferrer';
             hashLink.className = 'link link-primary';

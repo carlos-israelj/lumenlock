@@ -304,17 +304,28 @@ def dashboard(request):
                 balance = bal['balance']
                 break
 
+        # Determine network type for explorer links (testnet vs mainnet)
+        is_testnet = 'testnet' in settings.STELLAR_HORIZON_URL.lower()
+        explorer_network = 'testnet' if is_testnet else 'public'
+
         context = {
             'wallet_exists': wallet_exists,
             'balance': balance,
-            'public_key': wallet.public_key
+            'public_key': wallet.public_key,
+            'explorer_network': explorer_network
         }
     except Exception as e:
         logger.error(f"Error loading dashboard for user {request.user.id}: {str(e)}", exc_info=True)
+
+        # Determine network type for explorer links even on error
+        is_testnet = 'testnet' in settings.STELLAR_HORIZON_URL.lower()
+        explorer_network = 'testnet' if is_testnet else 'public'
+
         context = {
             'wallet_exists': wallet_exists,
             'balance': '0',
             'public_key': wallet.public_key,
+            'explorer_network': explorer_network,
             'error': 'Unable to load balance. Please try again later.'
         }
 
