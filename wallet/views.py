@@ -204,8 +204,11 @@ def send_money(request):
         try:
             # Get current fee stats from Horizon
             fee_stats = server.fee_stats().call()
-            # Use max fee for reliability (fee_charged is in stroops)
-            base_fee_stroops = int(fee_stats['max_fee']['max'])
+            # Use fee_charged p50 (median) for reasonable fee, with a 2x safety margin
+            # This prevents overcharging while ensuring transaction acceptance
+            median_fee = int(fee_stats['fee_charged']['p50'])
+            # Cap at 10x network base fee (100 stroops) to prevent extreme spikes
+            base_fee_stroops = min(median_fee * 2, 1000)
             # Convert stroops to XLM (1 XLM = 10,000,000 stroops)
             transaction_fee = Decimal(str(base_fee_stroops)) / Decimal('10000000')
 
@@ -315,7 +318,8 @@ def transaction_history(request):
                     to_address = payment.get('account', '')    # New account address
                 elif payment['type'] == 'account_merge':
                     # Account merge transfers all XLM from account to into
-                    amount = '0'  # Amount not provided by Horizon for merges
+                    # Horizon doesn't provide the amount for merges, mark as unavailable
+                    amount = 'N/A'  # Amount unknown for account merges
                     from_address = payment.get('account', '')  # Merged account
                     to_address = payment.get('into', '')       # Destination account
                 elif payment['type'] in ('path_payment_strict_send', 'path_payment_strict_receive'):

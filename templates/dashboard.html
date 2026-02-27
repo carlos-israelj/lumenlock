@@ -359,9 +359,14 @@
             const amountCell = document.createElement('td');
             // Work directly with the string to preserve exact precision
             const amountStr = tx.amount || '0';
-            // Simply trim trailing zeros after decimal point for cleaner display
-            const amount = amountStr.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-            amountCell.textContent = amount;
+            // Handle 'N/A' for account merges and other special cases
+            if (amountStr === 'N/A') {
+              amountCell.textContent = 'N/A';
+            } else {
+              // Trim trailing zeros after decimal point for cleaner display
+              const amount = amountStr.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+              amountCell.textContent = amount;
+            }
             row.appendChild(amountCell);
 
             // Asset type
