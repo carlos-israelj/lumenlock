@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
+from django.contrib import messages
 from stellar_sdk import Asset, Server, Keypair, TransactionBuilder, Network
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
 from stellar_sdk.client.requests_client import RequestsClient
@@ -55,19 +56,20 @@ def create_wallet(request):
         return redirect('dashboard')
 
     # Fund the account using Stellar's friendbot (testnet only)
-    friendbot_failed = False
     if 'testnet' in settings.STELLAR_HORIZON_URL.lower():
         try:
             response = requests.get(settings.STELLAR_FRIENDBOT_URL, params={"addr": keypair.public_key}, timeout=10)
             response.raise_for_status()
         except requests.RequestException as e:
             logger.warning(f"Friendbot funding failed for {keypair.public_key}: {str(e)}")
-            friendbot_failed = True
             # Delete the wallet if friendbot fails on testnet
             wallet.delete()
-            return JsonResponse({
-                'error': 'Failed to fund wallet from friendbot. Please try again or contact support if the issue persists.'
-            }, status=503)
+            # Use Django messages to show error in UI (form POST context)
+            messages.error(
+                request,
+                'Failed to fund wallet from friendbot. Please try again or contact support if the issue persists.'
+            )
+            return redirect('dashboard')
 
     return redirect('dashboard')
 

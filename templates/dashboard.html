@@ -3,6 +3,19 @@
 <main
   class="container mx-auto py-8 font-[orbitron] z-10 backdrop-blur mt-16 rounded-xl border border-[#FFE7A3]"
 >
+  <!-- Display Django messages (e.g., friendbot errors) -->
+  {% if messages %}
+  <div class="mb-4">
+    {% for message in messages %}
+    <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %} shadow-lg">
+      <div>
+        <span>{{ message }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <section class="text-center">
     <h2 class="text-4xl font-bold mb-4">Dashboard</h2>
     {% if wallet_exists %}
