@@ -29,7 +29,8 @@ if not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable is required. Please set it in your .env file.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+# Parse DEBUG with case-insensitive boolean handling (supports: True/true/TRUE/1/yes/YES)
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = []
 

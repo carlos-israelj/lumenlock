@@ -302,7 +302,8 @@
     historyModal.showModal();
 
     // Get explorer network from template context (testnet or public)
-    const explorerNetwork = "{{ explorer_network|default:'testnet' }}";
+    // Use escapejs to prevent JS injection if setting contains quotes/special chars
+    const explorerNetwork = "{{ explorer_network|default:'testnet'|escapejs }}";
 
     fetch("/transactions", {
       method: "GET",

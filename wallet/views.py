@@ -271,18 +271,35 @@ def transaction_history(request):
         payments = server.payments().for_account(wallet.public_key).order(desc=True).limit(50).call()
 
         transactions = []
+        # Include all payment-related types for complete transaction history
+        payment_types = {
+            'payment', 'create_account',
+            'path_payment_strict_send', 'path_payment_strict_receive',
+            'account_merge'  # Account merge transfers all XLM
+        }
+
         for payment in payments['_embedded']['records']:
-            if payment['type'] == 'payment' or payment['type'] == 'create_account':
+            if payment['type'] in payment_types:
+                # Handle different amount field names based on payment type
+                amount = '0'
+                if payment['type'] == 'create_account':
+                    amount = payment.get('starting_balance', '0')
+                elif payment['type'] in ('path_payment_strict_send', 'path_payment_strict_receive'):
+                    # Path payments have both source and destination amounts
+                    amount = payment.get('amount', payment.get('source_amount', '0'))
+                else:
+                    amount = payment.get('amount', '0')
+
                 tx_data = {
                     'id': payment.get('id', ''),
                     'type': payment['type'],
                     'created_at': payment.get('created_at', ''),
                     'transaction_hash': payment.get('transaction_hash', ''),
-                    'amount': payment.get('amount', payment.get('starting_balance', '0')),
+                    'amount': amount,
                     'asset_type': payment.get('asset_type', 'native'),
                     'asset_code': payment.get('asset_code', ''),  # For non-native assets
-                    'from': payment.get('from', ''),
-                    'to': payment.get('to', payment.get('account', '')),
+                    'from': payment.get('from', payment.get('source_account', '')),
+                    'to': payment.get('to', payment.get('account', payment.get('into', ''))),
                 }
                 transactions.append(tx_data)
 
