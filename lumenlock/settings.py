@@ -25,7 +25,9 @@ load_dotenv(BASE_DIR / '.env')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Parse DEBUG with case-insensitive boolean handling (supports: True/true/TRUE/1/yes/YES)
-DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
+# Default to True for development convenience (allows manage.py commands to work without .env)
+# Set DEBUG=False explicitly in production
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY')
