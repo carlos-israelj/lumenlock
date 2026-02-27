@@ -53,8 +53,14 @@ class CreateWalletViewTests(TestCase):
         response = self.client.post('/create_wallet', {'password': 'test123'})
         self.assertEqual(response.status_code, 302)  # Redirect to login
 
-    def test_create_wallet_assigns_correct_user(self):
+    @patch('wallet.views.requests.get')
+    def test_create_wallet_assigns_correct_user(self, mock_requests_get):
         """Test that wallet is assigned to request.user, not first user"""
+        # Mock friendbot response to avoid external network call
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests_get.return_value = mock_response
+
         # Create another user who would be User.objects.first()
         User.objects.create_user(username='firstuser', password='pass123')
 
@@ -65,8 +71,14 @@ class CreateWalletViewTests(TestCase):
         self.assertEqual(wallet.user, self.user)
         self.assertEqual(wallet.user.username, 'testuser')
 
-    def test_create_wallet_encrypts_secret(self):
+    @patch('wallet.views.requests.get')
+    def test_create_wallet_encrypts_secret(self, mock_requests_get):
         """Test that secret seed is properly encrypted"""
+        # Mock friendbot response to avoid external network call
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests_get.return_value = mock_response
+
         self.client.login(username='testuser', password='testpass123')
         response = self.client.post('/create_wallet', {'password': 'mypassword'})
 
@@ -77,8 +89,14 @@ class CreateWalletViewTests(TestCase):
         self.assertIsNotNone(decrypted)
         self.assertTrue(decrypted.startswith('S'))  # Stellar secret keys start with S
 
-    def test_create_wallet_redirect_if_exists(self):
+    @patch('wallet.views.requests.get')
+    def test_create_wallet_redirect_if_exists(self, mock_requests_get):
         """Test that creating wallet redirects to dashboard if wallet exists"""
+        # Mock friendbot response to avoid external network call
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests_get.return_value = mock_response
+
         self.client.login(username='testuser', password='testpass123')
 
         # Create first wallet

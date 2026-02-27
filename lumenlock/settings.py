@@ -157,4 +157,23 @@ else:
 # Stellar Network Configuration
 STELLAR_HORIZON_URL = os.getenv('STELLAR_HORIZON_URL', 'https://horizon-testnet.stellar.org')
 STELLAR_FRIENDBOT_URL = os.getenv('STELLAR_FRIENDBOT_URL', 'https://friendbot.stellar.org')
-STELLAR_NETWORK_PASSPHRASE = os.getenv('STELLAR_NETWORK_PASSPHRASE', 'Test SDF Network ; September 2015')
+
+# Derive network passphrase from Horizon URL if not explicitly set
+# This prevents silent mismatches between mainnet Horizon and testnet passphrase
+if 'STELLAR_NETWORK_PASSPHRASE' in os.environ:
+    STELLAR_NETWORK_PASSPHRASE = os.getenv('STELLAR_NETWORK_PASSPHRASE')
+else:
+    # Auto-detect based on Horizon URL
+    if 'testnet' in STELLAR_HORIZON_URL.lower():
+        STELLAR_NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015'
+    else:
+        # Assume mainnet if not testnet
+        STELLAR_NETWORK_PASSPHRASE = 'Public Global Stellar Network ; September 2015'
+        # Warn if using mainnet without explicit configuration
+        if DEBUG:
+            import sys
+            print(
+                "WARNING: Using mainnet Horizon URL without explicit STELLAR_NETWORK_PASSPHRASE. "
+                "Auto-detected: Public Global Stellar Network",
+                file=sys.stderr
+            )

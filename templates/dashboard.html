@@ -312,7 +312,16 @@
         "X-CSRFToken": "{{ csrf_token }}",
       },
     })
-      .then((response) => response.json())
+      .then((response) => {
+        // Check for HTTP errors before parsing JSON
+        return response.json().then((data) => {
+          if (!response.ok) {
+            // Server returned an error (4xx or 5xx)
+            throw new Error(data.error || 'Failed to load transaction history');
+          }
+          return data;
+        });
+      })
       .then((data) => {
         const listContainer = document.getElementById("transactionList");
 
@@ -402,8 +411,16 @@
       })
       .catch((error) => {
         console.error("Error fetching transaction history:", error);
-        document.getElementById("transactionList").innerHTML =
-          '<p class="text-center text-error">Error loading transactions.</p>';
+
+        // Display specific error message from backend
+        const errorMessage = error.message || 'Error loading transactions.';
+        const errorP = document.createElement('p');
+        errorP.className = 'text-center text-error';
+        errorP.textContent = errorMessage;
+
+        const listContainer = document.getElementById("transactionList");
+        listContainer.innerHTML = '';
+        listContainer.appendChild(errorP);
       });
   }
 </script>
