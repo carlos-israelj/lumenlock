@@ -18,6 +18,10 @@
       Receive Tokens
     </button>
 
+    <button class="btn btn-neutral" onclick="loadTransactionHistory()">
+      View Transaction History
+    </button>
+
     {% else %}
     <p class="text-lg mb-2">You don't have a wallet yet.</p>
     <button class="btn btn-primary" onclick="createWalletModal.showModal()">
@@ -30,12 +34,15 @@
 <!-- Create Wallet Modal -->
 <dialog id="createWalletModal" class="modal">
   <div class="modal-box">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
     <div class="modal-header">
       <h3 class="text-lg font-semibold">Create Wallet</h3>
     </div>
     <div class="modal-body">
       <!-- Form to create a wallet with password -->
-      <form method="POST" action="{% url 'create_wallet' %}">
+      <form method="POST" action="{% url 'create_wallet' %}" onsubmit="handleCreateWallet(event)">
         {% csrf_token %}
         <div class="form-control">
           <label class="label">
@@ -44,14 +51,15 @@
           <input
             type="password"
             name="password"
+            id="walletPassword"
             placeholder="Create your transaction password"
             class="input input-bordered"
             required
           />
         </div>
         <div class="modal-footer flex justify-center my-2">
-          <button type="submit" class="btn btn-primary bg-white">
-            Create Wallet
+          <button type="submit" class="btn btn-primary bg-white" id="createWalletBtn">
+            <span class="create_wallet_text">Create Wallet</span>
           </button>
         </div>
       </form>
@@ -65,6 +73,9 @@
 <!-- Send Tokens Modal -->
 <dialog id="sendModal" class="modal">
   <div class="modal-box border border-2 border-neutral">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
     <div class="modal-header">
       <h3 class="text-lg font-semibold">Send Tokens</h3>
     </div>
@@ -106,6 +117,18 @@
           required
         />
       </div>
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Memo (Optional)</span>
+        </label>
+        <input
+          type="text"
+          id="memo"
+          placeholder="Add a note to this transaction"
+          class="input input-bordered"
+          maxlength="28"
+        />
+      </div>
       <div class="modal-footer flex justify-center my-2">
         <button
           onclick="sendTokens()"
@@ -124,6 +147,9 @@
 
 <dialog id="receiveModal" class="modal">
   <div class="modal-box border border-2 border-neutral">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
     <div class="modal-header">
       <h3 class="text-lg font-semibold">Receive Tokens</h3>
     </div>
@@ -150,13 +176,52 @@
   </form>
 </dialog>
 
+<dialog id="historyModal" class="modal">
+  <div class="modal-box w-11/12 max-w-5xl border border-2 border-neutral">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
+    <div class="modal-header">
+      <h3 class="text-lg font-semibold">Transaction History</h3>
+    </div>
+    <div class="modal-body">
+      <div id="transactionList" class="overflow-x-auto">
+        <div class="loading loading-spinner loading-lg"></div>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
 <script>
+  function handleCreateWallet(event) {
+    const btn = document.getElementById("createWalletBtn");
+    const btnText = document.querySelector(".create_wallet_text");
+    const passwordInput = document.getElementById("walletPassword");
+
+    // Validate password is not empty
+    if (!passwordInput.value) {
+      return true; // Let browser handle required validation
+    }
+
+    // Disable button and show loading state
+    btn.disabled = true;
+    btnText.textContent = "Creating Wallet...";
+    btnText.classList.add("loading", "loading-spinner", "loading-sm");
+
+    // Allow form submission to proceed
+    return true;
+  }
+
   function sendTokens() {
     const recipient = document.getElementById("recipient").value;
     const amount = document.getElementById("amount").value;
     const transactionPassword = document.getElementById(
       "transactionPassword"
     ).value;
+    const memo = document.getElementById("memo").value;
     const send_btn = document.getElementById("send_btn");
     const send_btn_text = document.querySelector(".send_btn_text");
 
@@ -167,6 +232,7 @@
       recipient: recipient,
       amount: amount,
       transaction_password: transactionPassword,
+      memo: memo,
     };
 
     fetch("{% url 'send_tokens' %}", {
@@ -178,10 +244,14 @@
       body: JSON.stringify(data),
     })
       .then((response) => {
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        return response.json();
+        // Parse JSON regardless of status code to get error message
+        return response.json().then((data) => {
+          if (!response.ok) {
+            // Throw error with specific message from backend
+            throw new Error(data.error || "Transaction failed");
+          }
+          return data;
+        });
       })
       .then((data) => {
         if (data["status"] == "success") {
@@ -206,7 +276,89 @@
         }, 1000);
       })
       .catch((error) => {
-        console.error("There was a problem with the fetch operation:", error);
+        console.error("Transaction error:", error);
+
+        // Display specific error message from backend
+        const errorMessage = error.message || "Error sending tokens. Please check the details.";
+
+        Toastify({
+          text: errorMessage,
+          duration: 5000,  // Longer duration for error messages
+          close: true,
+          gravity: "top",
+          position: "center",
+          stopOnFocus: true,
+          style: {
+            background: "linear-gradient(to right, #ff5f6d, #ffc371)",
+          },
+        }).showToast();
+        send_btn.disabled = false;
+        send_btn_text.classList.remove("loading");
+      });
+  }
+
+  function loadTransactionHistory() {
+    historyModal.showModal();
+
+    fetch("/transactions", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token }}",
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        const listContainer = document.getElementById("transactionList");
+
+        if (data.transactions && data.transactions.length > 0) {
+          let tableHTML = `
+            <table class="table table-zebra w-full">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Amount (XLM)</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Date</th>
+                  <th>Hash</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+
+          data.transactions.forEach((tx) => {
+            const date = new Date(tx.created_at).toLocaleString();
+            const shortHash = tx.transaction_hash.substring(0, 8) + '...';
+            const shortFrom = tx.from ? tx.from.substring(0, 8) + '...' : 'N/A';
+            const shortTo = tx.to ? tx.to.substring(0, 8) + '...' : 'N/A';
+
+            tableHTML += `
+              <tr>
+                <td><span class="badge badge-primary">${tx.type}</span></td>
+                <td>${parseFloat(tx.amount).toFixed(2)}</td>
+                <td>${shortFrom}</td>
+                <td>${shortTo}</td>
+                <td>${date}</td>
+                <td><a href="https://stellar.expert/explorer/testnet/tx/${tx.transaction_hash}" target="_blank" class="link link-primary">${shortHash}</a></td>
+              </tr>
+            `;
+          });
+
+          tableHTML += `
+              </tbody>
+            </table>
+          `;
+
+          listContainer.innerHTML = tableHTML;
+        } else {
+          listContainer.innerHTML = '<p class="text-center">No transactions found.</p>';
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching transaction history:", error);
+        document.getElementById("transactionList").innerHTML =
+          '<p class="text-center text-error">Error loading transactions.</p>';
       });
   }
 </script>
