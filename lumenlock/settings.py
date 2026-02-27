@@ -163,6 +163,9 @@ if DEBUG:
     ACCOUNT_EMAIL_REQUIRED = False
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
+    # Production: 'optional' allows access but encourages verification
+    # For stricter security, consider changing to 'mandatory' to require
+    # email verification before wallet access. This is a policy decision.
     ACCOUNT_EMAIL_VERIFICATION = 'optional'
     ACCOUNT_EMAIL_REQUIRED = True
 

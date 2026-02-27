@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 import requests
 import json
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 
 logger = logging.getLogger(__name__)
 
@@ -154,8 +154,15 @@ def send_money(request):
             return JsonResponse({'error': 'Amount must be positive'}, status=400)
 
         # Normalize to fixed-point string (prevent scientific notation like 1E+3)
-        # Quantize to 7 decimal places (Stellar standard)
-        amount_decimal = amount_decimal.quantize(Decimal('0.0000001'))
+        # Quantize to 7 decimal places (Stellar standard) using ROUND_DOWN
+        # ROUND_DOWN ensures we never send more than user intended
+        original_amount = amount_decimal
+        amount_decimal = amount_decimal.quantize(Decimal('0.0000001'), rounding=ROUND_DOWN)
+
+        # Re-validate after quantization to ensure amount is still positive
+        if amount_decimal <= 0:
+            return JsonResponse({'error': 'Amount too small (must be at least 0.0000001 XLM after rounding)'}, status=400)
+
         amount = str(amount_decimal)
     except (ValueError, TypeError, InvalidOperation):
         return JsonResponse({'error': 'Invalid amount format'}, status=400)
@@ -306,23 +313,29 @@ def transaction_history(request):
         }
 
         for payment in payments['_embedded']['records']:
-            if payment['type'] in payment_types:
+            # Use .get() to handle schema changes or partial records gracefully
+            payment_type = payment.get('type')
+            if not payment_type:
+                # Skip records without type field
+                continue
+
+            if payment_type in payment_types:
                 # Handle different amount and address field names based on payment type
                 amount = '0'
                 from_address = ''
                 to_address = ''
 
-                if payment['type'] == 'create_account':
+                if payment_type == 'create_account':
                     amount = payment.get('starting_balance', '0')
                     from_address = payment.get('funder', '')  # Creator of the account
                     to_address = payment.get('account', '')    # New account address
-                elif payment['type'] == 'account_merge':
+                elif payment_type == 'account_merge':
                     # Account merge transfers all XLM from account to into
                     # Horizon doesn't provide the amount for merges, mark as unavailable
                     amount = 'N/A'  # Amount unknown for account merges
                     from_address = payment.get('account', '')  # Merged account
                     to_address = payment.get('into', '')       # Destination account
-                elif payment['type'] in ('path_payment_strict_send', 'path_payment_strict_receive'):
+                elif payment_type in ('path_payment_strict_send', 'path_payment_strict_receive'):
                     # Path payments have both source and destination amounts
                     amount = payment.get('amount', payment.get('source_amount', '0'))
                     from_address = payment.get('from', payment.get('source_account', ''))
@@ -334,7 +347,7 @@ def transaction_history(request):
 
                 tx_data = {
                     'id': payment.get('id', ''),
-                    'type': payment['type'],
+                    'type': payment_type,
                     'created_at': payment.get('created_at', ''),
                     'transaction_hash': payment.get('transaction_hash', ''),
                     'amount': amount,
