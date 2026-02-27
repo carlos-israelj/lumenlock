@@ -62,14 +62,30 @@ def create_wallet(request):
             response.raise_for_status()
         except requests.RequestException as e:
             logger.warning(f"Friendbot funding failed for {keypair.public_key}: {str(e)}")
-            # Delete the wallet if friendbot fails on testnet
-            wallet.delete()
-            # Use Django messages to show error in UI (form POST context)
-            messages.error(
-                request,
-                'Failed to fund wallet from friendbot. Please try again or contact support if the issue persists.'
-            )
-            return redirect('dashboard')
+
+            # Verify if account was actually funded before deleting wallet
+            # Friendbot might have succeeded even if we got a timeout/error
+            try:
+                server = get_horizon_server()
+                server.accounts().account_id(keypair.public_key).call()
+                # Account exists - friendbot succeeded despite error
+                logger.info(f"Account {keypair.public_key} was funded despite friendbot error")
+            except NotFoundError:
+                # Account not funded - safe to delete wallet
+                wallet.delete()
+                messages.error(
+                    request,
+                    'Failed to fund wallet from friendbot. Please try again or contact support if the issue persists.'
+                )
+                return redirect('dashboard')
+            except Exception as verify_error:
+                # Can't verify - keep wallet but warn user
+                logger.error(f"Failed to verify account funding for {keypair.public_key}: {str(verify_error)}")
+                messages.warning(
+                    request,
+                    'Wallet created but unable to verify funding. Please check your balance before sending transactions.'
+                )
+                return redirect('dashboard')
 
     return redirect('dashboard')
 

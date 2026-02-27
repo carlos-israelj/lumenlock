@@ -257,6 +257,13 @@
       body: JSON.stringify(data),
     })
       .then((response) => {
+        // Check content-type before parsing to handle auth redirects/HTML errors
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          // Non-JSON response (likely auth redirect or error page)
+          throw new Error("Session may have expired. Please refresh the page and try again.");
+        }
+
         // Parse JSON regardless of status code to get error message
         return response.json().then((data) => {
           if (!response.ok) {
@@ -327,6 +334,13 @@
       },
     })
       .then((response) => {
+        // Check content-type before parsing to handle auth redirects/HTML errors
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          // Non-JSON response (likely auth redirect or error page)
+          throw new Error("Session may have expired. Please refresh the page and try again.");
+        }
+
         // Check for HTTP errors before parsing JSON
         return response.json().then((data) => {
           if (!response.ok) {
