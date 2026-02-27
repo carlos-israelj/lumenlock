@@ -164,12 +164,17 @@ def send_money(request):
         if not amount_decimal.is_finite():
             return JsonResponse({'error': 'Amount must be a finite number'}, status=400)
 
-        # Stellar supports up to 7 decimal places
-        if amount_decimal.as_tuple().exponent < -7:
-            return JsonResponse({'error': 'Amount cannot have more than 7 decimal places'}, status=400)
-
         if amount_decimal <= 0:
             return JsonResponse({'error': 'Amount must be positive'}, status=400)
+
+        # Normalize to remove trailing zeros before checking precision
+        # This allows inputs like "1.23000000" which are valid
+        normalized = amount_decimal.normalize()
+
+        # Stellar supports up to 7 decimal places
+        # Check after normalization to accept trailing zeros
+        if normalized.as_tuple().exponent < -7:
+            return JsonResponse({'error': 'Amount cannot have more than 7 decimal places'}, status=400)
 
         # Normalize to fixed-point string (prevent scientific notation like 1E+3)
         # Quantize to 7 decimal places (Stellar standard) using ROUND_DOWN
@@ -233,7 +238,8 @@ def send_money(request):
             # This prevents overcharging while ensuring transaction acceptance
             median_fee = int(fee_stats['fee_charged']['p50'])
             # Cap at 10x network base fee (100 stroops) to prevent extreme spikes
-            base_fee_stroops = min(median_fee * 2, 1000)
+            # Floor at 100 stroops (network minimum) to prevent zero fee
+            base_fee_stroops = max(100, min(median_fee * 2, 1000))
             # Convert stroops to XLM (1 XLM = 10,000,000 stroops)
             transaction_fee = Decimal(str(base_fee_stroops)) / Decimal('10000000')
 

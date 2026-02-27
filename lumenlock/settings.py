@@ -44,7 +44,10 @@ if not SECRET_KEY:
         # In production (DEBUG=False), require SECRET_KEY to be set
         raise ValueError("SECRET_KEY environment variable is required. Please set it in your .env file.")
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS configuration with production safety
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ValueError("ALLOWED_HOSTS must be set in production. Set it in your .env file (comma-separated list).")
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
