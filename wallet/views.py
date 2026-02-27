@@ -56,7 +56,8 @@ def create_wallet(request):
         return redirect('dashboard')
 
     # Fund the account using Stellar's friendbot (testnet only)
-    if 'testnet' in settings.STELLAR_HORIZON_URL.lower():
+    # Use explicit config flag instead of URL substring to avoid misclassification
+    if settings.STELLAR_USE_FRIENDBOT:
         try:
             response = requests.get(settings.STELLAR_FRIENDBOT_URL, params={"addr": keypair.public_key}, timeout=10)
             response.raise_for_status()
@@ -410,7 +411,8 @@ def dashboard(request):
                 break
 
         # Determine network type for explorer links (testnet vs mainnet)
-        is_testnet = 'testnet' in settings.STELLAR_HORIZON_URL.lower()
+        # Use network passphrase for reliable detection instead of URL substring
+        is_testnet = settings.STELLAR_NETWORK_PASSPHRASE == 'Test SDF Network ; September 2015'
         explorer_network = 'testnet' if is_testnet else 'public'
 
         context = {
@@ -423,7 +425,8 @@ def dashboard(request):
         logger.error(f"Error loading dashboard for user {request.user.id}: {str(e)}", exc_info=True)
 
         # Determine network type for explorer links even on error
-        is_testnet = 'testnet' in settings.STELLAR_HORIZON_URL.lower()
+        # Use network passphrase for reliable detection instead of URL substring
+        is_testnet = settings.STELLAR_NETWORK_PASSPHRASE == 'Test SDF Network ; September 2015'
         explorer_network = 'testnet' if is_testnet else 'public'
 
         context = {
