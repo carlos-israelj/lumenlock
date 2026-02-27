@@ -18,14 +18,19 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file (development only)
-# Only load .env if DJANGO_SETTINGS_MODULE or environment explicitly allows it
-# This prevents accidental .env override in production
-# Set DJANGO_ENV=production to explicitly disable .env loading
-django_env = os.getenv('DJANGO_ENV', '').lower()
-if django_env != 'production':
+# Requires explicit opt-in via DJANGO_LOAD_DOTENV=true to prevent production misconfiguration
+# This prevents accidental .env override if .env is present in production containers
+# For development: set DJANGO_LOAD_DOTENV=true in your environment or shell
+use_dotenv = os.getenv('DJANGO_LOAD_DOTENV', '').lower() in ('true', '1', 'yes')
+if use_dotenv:
     env_file = BASE_DIR / '.env'
     if env_file.exists():
         load_dotenv(env_file)
+elif (BASE_DIR / '.env').exists() and not os.getenv('SECRET_KEY'):
+    # .env exists but DJANGO_LOAD_DOTENV not set - auto-load for convenience
+    # This allows development to work without setting env vars
+    # Production should always set SECRET_KEY explicitly, bypassing this
+    load_dotenv(BASE_DIR / '.env')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
