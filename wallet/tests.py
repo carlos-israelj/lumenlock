@@ -240,12 +240,40 @@ class SendMoneyViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('error', response_data)
 
-    def test_send_money_accepts_memo_field(self):
+    @patch('wallet.views.get_horizon_server')
+    def test_send_money_accepts_memo_field(self, mock_get_server):
         """Test that send_money accepts optional memo field with mocked Horizon"""
         self.client.login(username='testuser', password='testpass123')
 
+        # Create a valid destination keypair for testing
+        dest_keypair = Keypair.random()
+
+        # Mock Horizon server to prevent live network calls
+        mock_server = MagicMock()
+        # Mock the destination account check (make it exist)
+        mock_server.load_account.return_value = MagicMock()
+        # Mock source account with balance
+        mock_source = MagicMock()
+        mock_source.balances = [{'asset_type': 'native', 'balance': '1000.0'}]
+        mock_source.subentry_count = 0
+        mock_server.load_account.side_effect = [
+            MagicMock(),  # destination account check
+            mock_source   # source account load
+        ]
+        # Mock fee stats
+        mock_server.fee_stats.return_value.call.return_value = {
+            'fee_charged': {'p50': '100'}
+        }
+        # Mock ledger for base reserve
+        mock_server.ledgers.return_value.order.return_value.limit.return_value.call.return_value = {
+            '_embedded': {'records': [{'base_reserve_in_stroops': '5000000'}]}
+        }
+        # Mock transaction submission
+        mock_server.submit_transaction.return_value = {'hash': 'test_hash'}
+        mock_get_server.return_value = mock_server
+
         data = {
-            'recipient': 'GBBBB...',
+            'recipient': dest_keypair.public_key,
             'amount': '10',
             'transaction_password': self.password,
             'memo': 'Test payment'
@@ -257,11 +285,10 @@ class SendMoneyViewTests(TestCase):
             content_type='application/json'
         )
 
-        # Will fail validation (invalid recipient address format)
-        # This tests memo field is accepted without network call
-        self.assertEqual(response.status_code, 400)
+        # Should succeed with valid memo
+        self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertIn('error', response_data)
+        self.assertEqual(response_data['status'], 'success')
 
 
 class TransactionHistoryViewTests(TestCase):

@@ -30,6 +30,10 @@ def home(request):
 
 @login_required
 def create_wallet(request):
+    # Enforce POST method for CSRF protection and to prevent unintended side effects
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
     # Check if wallet already exists (first check before expensive operations)
     if Wallet.objects.filter(user=request.user).exists():
         return redirect('dashboard')
