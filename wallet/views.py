@@ -9,7 +9,10 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import requests
 import json
+import logging
 from decimal import Decimal, InvalidOperation
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     return render(request, 'home.html')
@@ -70,7 +73,8 @@ def check_balance(request):
     except NotFoundError:
         return JsonResponse({'error': 'Account not found on Stellar network'}, status=404)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.error(f"Error checking balance for {public_key}: {str(e)}", exc_info=True)
+        return JsonResponse({'error': 'Unable to retrieve balance. Please try again later.'}, status=500)
 
 
 @login_required
@@ -224,7 +228,8 @@ def send_money(request):
         else:
             return JsonResponse({'error': f'Transaction failed: {error_msg}'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f'Unexpected error: {str(e)}'}, status=500)
+        logger.error(f"Unexpected error in send_money for user {request.user.id}: {str(e)}", exc_info=True)
+        return JsonResponse({'error': 'An unexpected error occurred. Please try again later.'}, status=500)
 
 
 @login_required
@@ -259,7 +264,8 @@ def transaction_history(request):
         return JsonResponse({'transactions': transactions})
 
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.error(f"Error fetching transaction history for wallet {wallet.public_key}: {str(e)}", exc_info=True)
+        return JsonResponse({'error': 'Unable to load transaction history. Please try again later.'}, status=500)
 
 
 @login_required
@@ -288,11 +294,12 @@ def dashboard(request):
             'public_key': wallet.public_key
         }
     except Exception as e:
+        logger.error(f"Error loading dashboard for user {request.user.id}: {str(e)}", exc_info=True)
         context = {
             'wallet_exists': wallet_exists,
             'balance': '0',
             'public_key': wallet.public_key,
-            'error': str(e)
+            'error': 'Unable to load balance. Please try again later.'
         }
 
     return render(request, 'dashboard.html', context)
