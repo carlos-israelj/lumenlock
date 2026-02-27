@@ -337,7 +337,11 @@ def transaction_history(request):
             'account_merge'  # Account merge transfers all XLM
         }
 
-        for payment in payments['_embedded']['records']:
+        # Safely access nested response structure to handle schema changes
+        embedded = payments.get('_embedded', {})
+        records = embedded.get('records', [])
+
+        for payment in records:
             # Use .get() to handle schema changes or partial records gracefully
             payment_type = payment.get('type')
             if not payment_type:

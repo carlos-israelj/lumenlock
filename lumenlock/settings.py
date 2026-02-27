@@ -17,17 +17,19 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from .env file
-load_dotenv(BASE_DIR / '.env')
+# Load environment variables from .env file (development only)
+# .env should never be deployed to production - use proper env var management instead
+env_file = BASE_DIR / '.env'
+if env_file.exists():
+    load_dotenv(env_file)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Parse DEBUG with case-insensitive boolean handling (supports: True/true/TRUE/1/yes/YES)
-# Default to True for development convenience (allows manage.py commands to work without .env)
-# Set DEBUG=False explicitly in production
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
+# Defaults to False for security - set DEBUG=True in .env for local development
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY')
@@ -36,15 +38,12 @@ if not SECRET_KEY:
         # Safe fallback for local dev/testing - allows manage.py commands to work
         # This key is public and should NEVER be used in production
         SECRET_KEY = 'django-insecure-dev-key-for-local-testing-only-change-in-production'
-        import sys
-        print(
-            "WARNING: Using insecure development SECRET_KEY. "
-            "Set SECRET_KEY in .env for production!",
-            file=sys.stderr
-        )
     else:
         # In production (DEBUG=False), require SECRET_KEY to be set
-        raise ValueError("SECRET_KEY environment variable is required. Please set it in your .env file.")
+        raise ValueError(
+            "SECRET_KEY environment variable is required in production. "
+            "Set it in your environment (not .env file, which should never be deployed)."
+        )
 
 # ALLOWED_HOSTS configuration with production safety
 # Strip whitespace from each host to handle "example.com, www.example.com" format correctly
