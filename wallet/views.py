@@ -126,7 +126,9 @@ def send_money(request):
         if amount_decimal <= 0:
             return JsonResponse({'error': 'Amount must be positive'}, status=400)
 
-        # Convert to string for Stellar SDK (maintains precision)
+        # Normalize to fixed-point string (prevent scientific notation like 1E+3)
+        # Quantize to 7 decimal places (Stellar standard)
+        amount_decimal = amount_decimal.quantize(Decimal('0.0000001'))
         amount = str(amount_decimal)
     except (ValueError, TypeError, InvalidOperation):
         return JsonResponse({'error': 'Invalid amount format'}, status=400)
@@ -270,12 +272,12 @@ def transaction_history(request):
 
 @login_required
 def dashboard(request):
-    wallet_exists = Wallet.objects.filter(user=request.user).exists()
-
-    if not wallet_exists:
-        return render(request, 'dashboard.html', {'wallet_exists': wallet_exists})
-
-    wallet = Wallet.objects.get(user=request.user)
+    # Fetch wallet in one query to avoid race condition
+    try:
+        wallet = Wallet.objects.get(user=request.user)
+        wallet_exists = True
+    except Wallet.DoesNotExist:
+        return render(request, 'dashboard.html', {'wallet_exists': False})
 
     try:
         server = Server(settings.STELLAR_HORIZON_URL)
