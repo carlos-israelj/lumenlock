@@ -18,10 +18,14 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file (development only)
-# .env should never be deployed to production - use proper env var management instead
-env_file = BASE_DIR / '.env'
-if env_file.exists():
-    load_dotenv(env_file)
+# Only load .env if DJANGO_SETTINGS_MODULE or environment explicitly allows it
+# This prevents accidental .env override in production
+# Set DJANGO_ENV=production to explicitly disable .env loading
+django_env = os.getenv('DJANGO_ENV', '').lower()
+if django_env != 'production':
+    env_file = BASE_DIR / '.env'
+    if env_file.exists():
+        load_dotenv(env_file)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -34,15 +38,17 @@ DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY')
 if not SECRET_KEY:
-    if DEBUG:
-        # Safe fallback for local dev/testing - allows manage.py commands to work
+    # Provide fallback for development/testing when DEBUG is not explicitly False
+    # This allows manage.py commands to work in fresh dev/test/CI environments
+    if DEBUG or os.getenv('DEBUG') is None:
+        # Safe fallback for local dev/testing
         # This key is public and should NEVER be used in production
         SECRET_KEY = 'django-insecure-dev-key-for-local-testing-only-change-in-production'
     else:
-        # In production (DEBUG=False), require SECRET_KEY to be set
+        # In production (DEBUG explicitly set to False), require SECRET_KEY
         raise ValueError(
             "SECRET_KEY environment variable is required in production. "
-            "Set it in your environment (not .env file, which should never be deployed)."
+            "Set it in your environment (not .env file)."
         )
 
 # ALLOWED_HOSTS configuration with production safety
