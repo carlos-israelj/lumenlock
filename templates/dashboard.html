@@ -380,9 +380,15 @@
             toCell.textContent = tx.to ? tx.to.substring(0, 8) + '...' : 'N/A';
             row.appendChild(toCell);
 
-            // Date
+            // Date (with fallback for invalid timestamps)
             const dateCell = document.createElement('td');
-            dateCell.textContent = new Date(tx.created_at).toLocaleString();
+            const parsedDate = new Date(tx.created_at);
+            if (isNaN(parsedDate.getTime())) {
+              // Invalid date
+              dateCell.textContent = 'N/A';
+            } else {
+              dateCell.textContent = parsedDate.toLocaleString();
+            }
             row.appendChild(dateCell);
 
             // Hash (link) - use dynamic network from template context

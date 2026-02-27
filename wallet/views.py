@@ -8,6 +8,7 @@ import cryptocode
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.db import IntegrityError, transaction
 import requests
 import json
 import logging
@@ -28,6 +29,7 @@ def home(request):
 
 @login_required
 def create_wallet(request):
+    # Check if wallet already exists (first check before expensive operations)
     if Wallet.objects.filter(user=request.user).exists():
         return redirect('dashboard')
 
@@ -39,12 +41,18 @@ def create_wallet(request):
 
     encrypted_secret_seed = cryptocode.encrypt(keypair.secret, encryption_key)
 
-    # Fixed: Use request.user instead of User.objects.first()
-    wallet = Wallet.objects.create(
-        user=request.user,
-        public_key=keypair.public_key,
-        secret_seed=encrypted_secret_seed
-    )
+    # Atomic wallet creation with race condition protection
+    try:
+        with transaction.atomic():
+            # Fixed: Use request.user instead of User.objects.first()
+            wallet = Wallet.objects.create(
+                user=request.user,
+                public_key=keypair.public_key,
+                secret_seed=encrypted_secret_seed
+            )
+    except IntegrityError:
+        # Race condition: wallet created by concurrent request
+        return redirect('dashboard')
 
     # Fund the account using Stellar's friendbot (testnet only)
     friendbot_failed = False
@@ -296,15 +304,29 @@ def transaction_history(request):
 
         for payment in payments['_embedded']['records']:
             if payment['type'] in payment_types:
-                # Handle different amount field names based on payment type
+                # Handle different amount and address field names based on payment type
                 amount = '0'
+                from_address = ''
+                to_address = ''
+
                 if payment['type'] == 'create_account':
                     amount = payment.get('starting_balance', '0')
+                    from_address = payment.get('funder', '')  # Creator of the account
+                    to_address = payment.get('account', '')    # New account address
+                elif payment['type'] == 'account_merge':
+                    # Account merge transfers all XLM from account to into
+                    amount = '0'  # Amount not provided by Horizon for merges
+                    from_address = payment.get('account', '')  # Merged account
+                    to_address = payment.get('into', '')       # Destination account
                 elif payment['type'] in ('path_payment_strict_send', 'path_payment_strict_receive'):
                     # Path payments have both source and destination amounts
                     amount = payment.get('amount', payment.get('source_amount', '0'))
-                else:
+                    from_address = payment.get('from', payment.get('source_account', ''))
+                    to_address = payment.get('to', payment.get('destination_account', ''))
+                else:  # Standard payment
                     amount = payment.get('amount', '0')
+                    from_address = payment.get('from', '')
+                    to_address = payment.get('to', '')
 
                 tx_data = {
                     'id': payment.get('id', ''),
@@ -314,8 +336,8 @@ def transaction_history(request):
                     'amount': amount,
                     'asset_type': payment.get('asset_type', 'native'),
                     'asset_code': payment.get('asset_code', ''),  # For non-native assets
-                    'from': payment.get('from', payment.get('source_account', '')),
-                    'to': payment.get('to', payment.get('account', payment.get('into', ''))),
+                    'from': from_address,
+                    'to': to_address,
                 }
                 transactions.append(tx_data)
 

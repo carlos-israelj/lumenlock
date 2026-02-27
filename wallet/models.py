@@ -8,5 +8,11 @@ class Wallet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        # Prevent duplicate wallets for same user (race condition protection)
+        constraints = [
+            models.UniqueConstraint(fields=['user'], name='unique_user_wallet')
+        ]
+
     def __str__(self):
         return self.user.username + ' - ' + self.public_key
