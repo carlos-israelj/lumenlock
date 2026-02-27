@@ -92,6 +92,21 @@ def send_money(request):
     if not all([destination_public_key, amount, encryption_key]):
         return JsonResponse({'error': 'Missing required fields'}, status=400)
 
+    # Validate and normalize memo
+    if memo_text:
+        # Ensure memo is a string
+        if not isinstance(memo_text, str):
+            return JsonResponse({'error': 'Memo must be a string'}, status=400)
+
+        # Stellar text memo limit is 28 bytes
+        memo_text = memo_text.strip()
+        if len(memo_text.encode('utf-8')) > 28:
+            return JsonResponse({'error': 'Memo cannot exceed 28 bytes'}, status=400)
+
+        # Validate characters (printable ASCII for safety)
+        if not all(32 <= ord(c) <= 126 for c in memo_text):
+            return JsonResponse({'error': 'Memo contains invalid characters. Use only printable ASCII.'}, status=400)
+
     # Validate amount using Decimal for precision
     try:
         amount_decimal = Decimal(str(amount))
@@ -152,9 +167,23 @@ def send_money(request):
                 xlm_balance = Decimal(balance['balance'])
                 break
 
-        if xlm_balance < amount_decimal:
+        # Calculate minimum balance required (base reserve + fee)
+        # Base reserve: 1 XLM per entry (2 entries minimum = 2 XLM)
+        # Additional reserves for trustlines, offers, signers, etc.
+        num_subentries = int(source_account.subentry_count)
+        base_reserve = Decimal('0.5')  # Current base reserve per entry
+        min_balance = (2 + num_subentries) * base_reserve
+
+        # Transaction fee (100 stroops = 0.00001 XLM per operation)
+        transaction_fee = Decimal('0.00001')
+
+        # Total required: amount + min_balance + fee
+        total_required = amount_decimal + min_balance + transaction_fee
+
+        if xlm_balance < total_required:
+            available = xlm_balance - min_balance - transaction_fee
             return JsonResponse({
-                'error': f'Insufficient funds: Your balance is {xlm_balance} XLM, but you are trying to send {amount} XLM'
+                'error': f'Insufficient funds: You need {total_required} XLM (including {min_balance} XLM minimum balance + {transaction_fee} XLM fee), but your balance is {xlm_balance} XLM. Available to send: {max(available, Decimal("0"))} XLM'
             }, status=400)
 
         # Build transaction
@@ -168,10 +197,9 @@ def send_money(request):
             asset=Asset.native()
         )
 
-        # Add memo if provided
+        # Add memo if provided (already validated above)
         if memo_text:
-            from stellar_sdk import TextMemo
-            transaction_builder.add_text_memo(memo_text[:28])  # Stellar limit
+            transaction_builder.add_text_memo(memo_text)
 
         transaction = transaction_builder.set_timeout(30).build()
         transaction.sign(source_keypair)
