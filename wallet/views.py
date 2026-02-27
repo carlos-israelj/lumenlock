@@ -47,17 +47,29 @@ def create_wallet(request):
     )
 
     # Fund the account using Stellar's friendbot (testnet only)
-    try:
-        response = requests.get(settings.STELLAR_FRIENDBOT_URL, params={"addr": keypair.public_key}, timeout=10)
-        response.raise_for_status()
-    except requests.RequestException:
-        pass  # Friendbot errors are non-critical
+    friendbot_failed = False
+    if 'testnet' in settings.STELLAR_HORIZON_URL.lower():
+        try:
+            response = requests.get(settings.STELLAR_FRIENDBOT_URL, params={"addr": keypair.public_key}, timeout=10)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            logger.warning(f"Friendbot funding failed for {keypair.public_key}: {str(e)}")
+            friendbot_failed = True
+            # Delete the wallet if friendbot fails on testnet
+            wallet.delete()
+            return JsonResponse({
+                'error': 'Failed to fund wallet from friendbot. Please try again or contact support if the issue persists.'
+            }, status=503)
 
     return redirect('dashboard')
 
 
 @login_required  # Fixed: Added missing authentication decorator
 def check_balance(request):
+    # Enforce POST method for consistency and CSRF protection
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
     # Security: Only allow users to check their own wallet balance
     try:
         wallet = Wallet.objects.get(user=request.user)
@@ -242,6 +254,9 @@ def send_money(request):
 
     except BadRequestError as e:
         error_msg = str(e)
+        # Log full error details server-side
+        logger.error(f"BadRequestError in send_money for user {request.user.id}: {error_msg}", exc_info=True)
+
         # Parse common Stellar errors for user-friendly messages
         if 'op_underfunded' in error_msg.lower():
             return JsonResponse({'error': 'Insufficient funds: Account does not have enough XLM for this transaction'}, status=400)
@@ -250,7 +265,8 @@ def send_money(request):
         elif 'tx_bad_seq' in error_msg.lower():
             return JsonResponse({'error': 'Transaction sequence error. Please try again.'}, status=400)
         else:
-            return JsonResponse({'error': f'Transaction failed: {error_msg}'}, status=400)
+            # Return sanitized generic message to avoid exposing internal details
+            return JsonResponse({'error': 'Transaction failed. Please check your transaction details and try again.'}, status=400)
     except Exception as e:
         logger.error(f"Unexpected error in send_money for user {request.user.id}: {str(e)}", exc_info=True)
         return JsonResponse({'error': 'An unexpected error occurred. Please try again later.'}, status=500)
