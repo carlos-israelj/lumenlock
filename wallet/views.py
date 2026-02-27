@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from stellar_sdk import Asset, Server, Keypair, TransactionBuilder, Network
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
+from stellar_sdk.client.requests_client import RequestsClient
 from .models import Wallet
 import cryptocode
 from django.contrib.auth.decorators import login_required
@@ -13,6 +14,14 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
+
+# Configure Horizon client with timeout to prevent hanging requests
+def get_horizon_server():
+    """Create a Horizon Server instance with proper timeout configuration"""
+    # Use RequestsClient with explicit timeout (10 seconds for API calls)
+    # request_timeout: timeout for GET requests, post_timeout: timeout for POST requests
+    client = RequestsClient(request_timeout=10, post_timeout=10)
+    return Server(horizon_url=settings.STELLAR_HORIZON_URL, client=client)
 
 def home(request):
     return render(request, 'home.html')
@@ -57,7 +66,7 @@ def check_balance(request):
         return JsonResponse({'error': 'No wallet found for user'}, status=404)
 
     try:
-        server = Server(settings.STELLAR_HORIZON_URL)
+        server = get_horizon_server()
         account = server.accounts().account_id(public_key).call()
 
         # Fixed: Find native XLM balance specifically, not just balances[0]
@@ -142,7 +151,7 @@ def send_money(request):
         return JsonResponse({'error': 'Invalid password'}, status=401)
 
     try:
-        server = Server(settings.STELLAR_HORIZON_URL)
+        server = get_horizon_server()
 
         # Validate keypair creation
         try:
@@ -256,7 +265,7 @@ def transaction_history(request):
         return JsonResponse({'error': 'No wallet found'}, status=404)
 
     try:
-        server = Server(settings.STELLAR_HORIZON_URL)
+        server = get_horizon_server()
 
         # Fetch payments for this account (sorted newest first)
         payments = server.payments().for_account(wallet.public_key).order(desc=True).limit(50).call()
@@ -294,7 +303,7 @@ def dashboard(request):
         return render(request, 'dashboard.html', {'wallet_exists': False})
 
     try:
-        server = Server(settings.STELLAR_HORIZON_URL)
+        server = get_horizon_server()
         account = server.accounts().account_id(wallet.public_key).call()
 
         # Fixed: Find native XLM balance specifically
