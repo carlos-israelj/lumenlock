@@ -24,7 +24,9 @@ load_dotenv(BASE_DIR / '.env')
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-this')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required. Please set it in your .env file.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
@@ -154,3 +156,4 @@ else:
 # Stellar Network Configuration
 STELLAR_HORIZON_URL = os.getenv('STELLAR_HORIZON_URL', 'https://horizon-testnet.stellar.org')
 STELLAR_FRIENDBOT_URL = os.getenv('STELLAR_FRIENDBOT_URL', 'https://friendbot.stellar.org')
+STELLAR_NETWORK_PASSPHRASE = os.getenv('STELLAR_NETWORK_PASSPHRASE', 'Test SDF Network ; September 2015')

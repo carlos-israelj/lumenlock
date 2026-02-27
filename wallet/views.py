@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import requests
 import json
+from decimal import Decimal, InvalidOperation
 
 def home(request):
     return render(request, 'home.html')
@@ -91,12 +92,25 @@ def send_money(request):
     if not all([destination_public_key, amount, encryption_key]):
         return JsonResponse({'error': 'Missing required fields'}, status=400)
 
+    # Validate amount using Decimal for precision
     try:
-        amount = str(float(amount))
-        if float(amount) <= 0:
+        amount_decimal = Decimal(str(amount))
+
+        # Check for non-finite values
+        if not amount_decimal.is_finite():
+            return JsonResponse({'error': 'Amount must be a finite number'}, status=400)
+
+        # Stellar supports up to 7 decimal places
+        if amount_decimal.as_tuple().exponent < -7:
+            return JsonResponse({'error': 'Amount cannot have more than 7 decimal places'}, status=400)
+
+        if amount_decimal <= 0:
             return JsonResponse({'error': 'Amount must be positive'}, status=400)
-    except (ValueError, TypeError):
-        return JsonResponse({'error': 'Invalid amount'}, status=400)
+
+        # Convert to string for Stellar SDK (maintains precision)
+        amount = str(amount_decimal)
+    except (ValueError, TypeError, InvalidOperation):
+        return JsonResponse({'error': 'Invalid amount format'}, status=400)
 
     try:
         wallet = Wallet.objects.get(user=request.user)
@@ -132,21 +146,21 @@ def send_money(request):
             return JsonResponse({'error': 'Source account not found. Please ensure your wallet is funded.'}, status=404)
 
         # Check if account has sufficient balance
-        xlm_balance = 0
+        xlm_balance = Decimal('0')
         for balance in source_account.balances:
             if balance.get('asset_type') == 'native':
-                xlm_balance = float(balance['balance'])
+                xlm_balance = Decimal(balance['balance'])
                 break
 
-        if xlm_balance < float(amount):
+        if xlm_balance < amount_decimal:
             return JsonResponse({
-                'error': f'Insufficient funds: Your balance is {xlm_balance:.2f} XLM, but you are trying to send {amount} XLM'
+                'error': f'Insufficient funds: Your balance is {xlm_balance} XLM, but you are trying to send {amount} XLM'
             }, status=400)
 
         # Build transaction
         transaction_builder = TransactionBuilder(
             source_account=source_account,
-            network_passphrase=Network.TESTNET_NETWORK_PASSPHRASE,
+            network_passphrase=settings.STELLAR_NETWORK_PASSPHRASE,
             base_fee=100
         ).append_payment_op(
             destination=destination_public_key,
