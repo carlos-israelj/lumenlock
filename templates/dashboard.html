@@ -298,6 +298,7 @@
   }
 
   function loadTransactionHistory() {
+    const historyModal = document.getElementById("historyModal");
     historyModal.showModal();
 
     fetch("/transactions", {
@@ -312,47 +313,84 @@
         const listContainer = document.getElementById("transactionList");
 
         if (data.transactions && data.transactions.length > 0) {
-          let tableHTML = `
-            <table class="table table-zebra w-full">
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Amount (XLM)</th>
-                  <th>From</th>
-                  <th>To</th>
-                  <th>Date</th>
-                  <th>Hash</th>
-                </tr>
-              </thead>
-              <tbody>
-          `;
+          // Build table using DOM APIs to prevent XSS
+          const table = document.createElement('table');
+          table.className = 'table table-zebra w-full';
 
+          // Create thead
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          ['Type', 'Amount', 'Asset', 'From', 'To', 'Date', 'Hash'].forEach(headerText => {
+            const th = document.createElement('th');
+            th.textContent = headerText;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+
+          // Create tbody
+          const tbody = document.createElement('tbody');
           data.transactions.forEach((tx) => {
-            const date = new Date(tx.created_at).toLocaleString();
-            const shortHash = tx.transaction_hash.substring(0, 8) + '...';
-            const shortFrom = tx.from ? tx.from.substring(0, 8) + '...' : 'N/A';
-            const shortTo = tx.to ? tx.to.substring(0, 8) + '...' : 'N/A';
+            const row = document.createElement('tr');
 
-            tableHTML += `
-              <tr>
-                <td><span class="badge badge-primary">${tx.type}</span></td>
-                <td>${parseFloat(tx.amount).toFixed(2)}</td>
-                <td>${shortFrom}</td>
-                <td>${shortTo}</td>
-                <td>${date}</td>
-                <td><a href="https://stellar.expert/explorer/testnet/tx/${tx.transaction_hash}" target="_blank" class="link link-primary">${shortHash}</a></td>
-              </tr>
-            `;
+            // Type
+            const typeCell = document.createElement('td');
+            const typeBadge = document.createElement('span');
+            typeBadge.className = 'badge badge-primary';
+            typeBadge.textContent = tx.type || 'unknown';
+            typeCell.appendChild(typeBadge);
+            row.appendChild(typeCell);
+
+            // Amount
+            const amountCell = document.createElement('td');
+            const amount = parseFloat(tx.amount || 0).toFixed(2);
+            amountCell.textContent = amount;
+            row.appendChild(amountCell);
+
+            // Asset type
+            const assetCell = document.createElement('td');
+            const assetType = tx.asset_type === 'native' ? 'XLM' : (tx.asset_code || 'unknown');
+            assetCell.textContent = assetType;
+            row.appendChild(assetCell);
+
+            // From
+            const fromCell = document.createElement('td');
+            fromCell.textContent = tx.from ? tx.from.substring(0, 8) + '...' : 'N/A';
+            row.appendChild(fromCell);
+
+            // To
+            const toCell = document.createElement('td');
+            toCell.textContent = tx.to ? tx.to.substring(0, 8) + '...' : 'N/A';
+            row.appendChild(toCell);
+
+            // Date
+            const dateCell = document.createElement('td');
+            dateCell.textContent = new Date(tx.created_at).toLocaleString();
+            row.appendChild(dateCell);
+
+            // Hash (link)
+            const hashCell = document.createElement('td');
+            const hashLink = document.createElement('a');
+            hashLink.href = 'https://stellar.expert/explorer/testnet/tx/' + encodeURIComponent(tx.transaction_hash || '');
+            hashLink.target = '_blank';
+            hashLink.rel = 'noopener noreferrer';
+            hashLink.className = 'link link-primary';
+            hashLink.textContent = tx.transaction_hash ? tx.transaction_hash.substring(0, 8) + '...' : 'N/A';
+            hashCell.appendChild(hashLink);
+            row.appendChild(hashCell);
+
+            tbody.appendChild(row);
           });
 
-          tableHTML += `
-              </tbody>
-            </table>
-          `;
-
-          listContainer.innerHTML = tableHTML;
+          table.appendChild(tbody);
+          listContainer.innerHTML = '';
+          listContainer.appendChild(table);
         } else {
-          listContainer.innerHTML = '<p class="text-center">No transactions found.</p>';
+          const noDataMsg = document.createElement('p');
+          noDataMsg.className = 'text-center';
+          noDataMsg.textContent = 'No transactions found.';
+          listContainer.innerHTML = '';
+          listContainer.appendChild(noDataMsg);
         }
       })
       .catch((error) => {

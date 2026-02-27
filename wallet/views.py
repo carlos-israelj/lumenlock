@@ -258,6 +258,7 @@ def transaction_history(request):
                     'transaction_hash': payment.get('transaction_hash', ''),
                     'amount': payment.get('amount', payment.get('starting_balance', '0')),
                     'asset_type': payment.get('asset_type', 'native'),
+                    'asset_code': payment.get('asset_code', ''),  # For non-native assets
                     'from': payment.get('from', ''),
                     'to': payment.get('to', payment.get('account', '')),
                 }
