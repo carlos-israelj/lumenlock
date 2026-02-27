@@ -305,7 +305,8 @@
     // Use escapejs to prevent JS injection if setting contains quotes/special chars
     const explorerNetwork = "{{ explorer_network|default:'testnet'|escapejs }}";
 
-    fetch("/transactions", {
+    // Use Django URL resolver to handle URL prefix changes
+    fetch("{% url 'transaction_history' %}", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
