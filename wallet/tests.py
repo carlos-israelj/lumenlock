@@ -183,7 +183,8 @@ class SendMoneyViewTests(TestCase):
         response = self.client.post('/send_money')
         self.assertEqual(response.status_code, 302)  # Redirect to login
 
-    def test_send_money_validates_password(self):
+    @patch('wallet.views.get_horizon_server')
+    def test_send_money_validates_password(self, mock_get_server):
         """Test that send_money rejects wrong password"""
         self.client.login(username='testuser', password='testpass123')
 
@@ -202,6 +203,8 @@ class SendMoneyViewTests(TestCase):
         response_data = json.loads(response.content)
         self.assertEqual(response.status_code, 401)
         self.assertIn('error', response_data)
+        # Password check happens before Horizon calls, so mock should not be called
+        mock_get_server.assert_not_called()
 
     def test_send_money_validates_amount(self):
         """Test that send_money validates amount is positive"""

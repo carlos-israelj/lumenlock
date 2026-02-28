@@ -18,13 +18,10 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file (development only)
-# Only loads .env when DEBUG is not explicitly set to False in environment
-# This prevents production (with DEBUG=False set) from loading .env
-# Development can use .env without setting DEBUG in environment
-debug_env = os.getenv('DEBUG', '').lower()
-# Load .env only if DEBUG is not explicitly False in environment
-# This ensures production with DEBUG=False will never load .env
-if debug_env not in ('false', '0', 'no'):
+# Requires explicit opt-in to prevent production misconfiguration
+# Set LOAD_DOTENV=true in your shell/environment to enable (for development)
+# Production should never set this and should use proper environment variables
+if os.getenv('LOAD_DOTENV', '').lower() in ('true', '1', 'yes'):
     env_file = BASE_DIR / '.env'
     if env_file.exists():
         load_dotenv(env_file)
@@ -57,7 +54,7 @@ if not SECRET_KEY:
 # Strip whitespace from each host to handle "example.com, www.example.com" format correctly
 ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', '').split(',') if host.strip()] if os.getenv('ALLOWED_HOSTS') else []
 if not DEBUG and not ALLOWED_HOSTS:
-    raise ValueError("ALLOWED_HOSTS must be set in production. Set it in your .env file (comma-separated list).")
+    raise ValueError("ALLOWED_HOSTS must be set in production. Set it in your environment as a comma-separated list.")
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
