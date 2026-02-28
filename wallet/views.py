@@ -152,14 +152,11 @@ def send_money(request):
         if not isinstance(memo_text, str):
             return JsonResponse({'error': 'Memo must be a string'}, status=400)
 
-        # Stellar text memo limit is 28 bytes
+        # Stellar text memo limit is 28 bytes (UTF-8 encoded)
+        # Stellar supports full UTF-8, not just ASCII
         memo_text = memo_text.strip()
         if len(memo_text.encode('utf-8')) > 28:
-            return JsonResponse({'error': 'Memo cannot exceed 28 bytes'}, status=400)
-
-        # Validate characters (printable ASCII for safety)
-        if not all(32 <= ord(c) <= 126 for c in memo_text):
-            return JsonResponse({'error': 'Memo contains invalid characters. Use only printable ASCII.'}, status=400)
+            return JsonResponse({'error': 'Memo cannot exceed 28 bytes when UTF-8 encoded'}, status=400)
 
     # Validate amount using Decimal for precision
     try:
