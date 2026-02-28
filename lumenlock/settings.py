@@ -18,11 +18,13 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file (development only)
-# Auto-loads .env if present for development convenience
-# Set DJANGO_LOAD_DOTENV=false to explicitly disable (e.g., in production containers)
-# Production deployments should set this to false and use proper environment variables
-use_dotenv = os.getenv('DJANGO_LOAD_DOTENV', 'true').lower() in ('true', '1', 'yes')
-if use_dotenv:
+# Only loads .env when DEBUG is not explicitly set to False in environment
+# This prevents production (with DEBUG=False set) from loading .env
+# Development can use .env without setting DEBUG in environment
+debug_env = os.getenv('DEBUG', '').lower()
+# Load .env only if DEBUG is not explicitly False in environment
+# This ensures production with DEBUG=False will never load .env
+if debug_env not in ('false', '0', 'no'):
     env_file = BASE_DIR / '.env'
     if env_file.exists():
         load_dotenv(env_file)
